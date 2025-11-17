@@ -137,6 +137,12 @@ const ConnectionItem = styled.div`
   border-radius: 4px;
   border-left: 3px solid #3b82f6;
   font-size: 0.8rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: #e0f2fe;
+  }
 `;
 
 const DataSection = styled(Section)`
@@ -170,6 +176,36 @@ const CopyButton = styled.button`
   }
 `;
 
+const Input = styled.input`
+  width: 100%;
+  padding: 8px;
+  margin-top: 5px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 0.8rem;
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 8px;
+  margin-top: 5px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 0.8rem;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #64748b;
+
+  &:hover {
+    color: #374151;
+  }
+`;
+
 // Initial nodes
 const initialNodes = [
   {
@@ -198,14 +234,150 @@ const initialEdges = [];
 let nodeId = 2;
 const getNodeId = () => `${nodeId++}`;
 
+// Edge Editor Component
+const EdgeEditor = ({ selectedEdge, edges, onUpdateConnection, onClose }) => {
+  if (!selectedEdge) {
+    return (
+      <Section>
+        <SectionTitle>Connection Editor</SectionTitle>
+        <div
+          style={{ color: "#64748b", fontSize: "0.9rem", textAlign: "center" }}
+        >
+          Click on a connection to edit
+        </div>
+        <List>
+          {edges.map((edge) => (
+            <ListItem
+              key={edge.id}
+              style={{
+                cursor: "pointer",
+                padding: "5px",
+                background: "#f8fafc",
+                borderRadius: "4px",
+                marginBottom: "8px",
+              }}
+              onClick={() => onUpdateConnection(edge.id, {}, true)}
+            >
+              {edge.source} → {edge.target}
+              <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                {edge.data?.buttonLabel || "No label"}
+              </div>
+            </ListItem>
+          ))}
+        </List>
+      </Section>
+    );
+  }
+
+  const currentEdge = edges.find((edge) => edge.id === selectedEdge);
+
+  return (
+    <Section>
+      <SectionTitle>
+        Edit Connection
+        <CloseButton onClick={onClose}>✕</CloseButton>
+      </SectionTitle>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div>
+          <label
+            style={{ fontSize: "0.8rem", fontWeight: "bold", display: "block" }}
+          >
+            Button Name:
+          </label>
+          <Input
+            type="text"
+            value={currentEdge?.data?.buttonName || ""}
+            onChange={(e) =>
+              onUpdateConnection(selectedEdge, {
+                buttonName: e.target.value,
+              })
+            }
+            placeholder="Enter button name..."
+          />
+        </div>
+        <div>
+          <label
+            style={{ fontSize: "0.8rem", fontWeight: "bold", display: "block" }}
+          >
+            Button Label:
+          </label>
+          <Input
+            type="text"
+            value={currentEdge?.data?.buttonLabel || ""}
+            onChange={(e) =>
+              onUpdateConnection(selectedEdge, {
+                buttonLabel: e.target.value,
+              })
+            }
+            placeholder="Enter button label..."
+          />
+        </div>
+        <div>
+          <label
+            style={{ fontSize: "0.8rem", fontWeight: "bold", display: "block" }}
+          >
+            Connection Type:
+          </label>
+          <Select
+            value={currentEdge?.data?.connectionType || "navigation"}
+            onChange={(e) =>
+              onUpdateConnection(selectedEdge, {
+                connectionType: e.target.value,
+              })
+            }
+          >
+            <option value="navigation">Navigation</option>
+            <option value="action">Action</option>
+            <option value="conditional">Conditional</option>
+            <option value="success">Success</option>
+            <option value="error">Error</option>
+          </Select>
+        </div>
+        <div>
+          <label
+            style={{ fontSize: "0.8rem", fontWeight: "bold", display: "block" }}
+          >
+            Priority:
+          </label>
+          <Select
+            value={currentEdge?.data?.priority || 1}
+            onChange={(e) =>
+              onUpdateConnection(selectedEdge, {
+                priority: parseInt(e.target.value),
+              })
+            }
+          >
+            <option value={1}>Low</option>
+            <option value={2}>Medium</option>
+            <option value={3}>High</option>
+          </Select>
+        </div>
+        <div
+          style={{
+            padding: "10px",
+            background: "#f8fafc",
+            borderRadius: "4px",
+          }}
+        >
+          <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+            <strong>Connection:</strong> {currentEdge?.source} →{" "}
+            {currentEdge?.target}
+          </div>
+        </div>
+      </div>
+    </Section>
+  );
+};
+
 function Flow() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [flowData, setFlowData] = useState({
+    flowId: `flow_${Date.now()}`,
+    flowName: "Untitled Flow",
     nodes: [],
-    edges: [],
     connections: [],
-    metadata: {},
   });
 
   console.log("flowData----->", flowData);
@@ -214,22 +386,21 @@ function Flow() {
   useEffect(() => {
     const structuredNodes = nodes.map((node) => ({
       nodeId: node.id,
-      label: node.data.label,
-      type: node.data.type || "regular",
+      templateId: node.data.templateId || `template_${node.id}`,
+      templateName: node.data.templateName || node.data.label,
+      displayName: node.data.label,
+      nodeType: node.data.type || "regular",
       position: node.position,
       style: node.style,
-      createdAt: node.data.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
-
-    const structuredEdges = edges.map((edge) => ({
-      edgeId: edge.id,
-      sourceId: edge.source,
-      targetId: edge.target,
-      sourceLabel: nodes.find((n) => n.id === edge.source)?.data.label,
-      targetLabel: nodes.find((n) => n.id === edge.target)?.data.label,
-      connectionType: "direct",
-      createdAt: new Date().toISOString(),
+      properties: {
+        isInitial: node.data.type === "initial",
+        isFinal: node.data.type === "final",
+        hasButtons: node.data.hasButtons || false,
+      },
+      timestamps: {
+        createdAt: node.data.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
     }));
 
     const connections = edges.map((edge) => {
@@ -239,38 +410,43 @@ function Flow() {
       return {
         connectionId: edge.id,
         source: {
-          id: sourceNode?.id,
-          label: sourceNode?.data.label,
-          type: sourceNode?.data.type,
+          templateId:
+            sourceNode?.data.templateId || `template_${sourceNode?.id}`,
+          templateName: sourceNode?.data.templateName || sourceNode?.data.label,
+          buttonName: edge.data?.buttonName || "default_button",
+          buttonLabel: edge.data?.buttonLabel || sourceNode?.data.label,
         },
         target: {
-          id: targetNode?.id,
-          label: targetNode?.data.label,
-          type: targetNode?.data.type,
+          templateId:
+            targetNode?.data.templateId || `template_${targetNode?.id}`,
+          templateName: targetNode?.data.templateName || targetNode?.data.label,
         },
-        timestamp: new Date().toISOString(),
+        connectionType: edge.data?.connectionType || "navigation",
+        priority: edge.data?.priority || 1,
       };
     });
 
-    const metadata = {
-      totalNodes: nodes.length,
-      totalConnections: edges.length,
-      hasInitialNode: nodes.some((n) => n.data.type === "initial"),
-      hasFinalNode: nodes.some((n) => n.data.type === "final"),
-      flowCreatedAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
-    };
-
-    setFlowData({
+    setFlowData((prev) => ({
+      ...prev,
       nodes: structuredNodes,
-      edges: structuredEdges,
       connections,
-      metadata,
-    });
+    }));
   }, [nodes, edges]);
 
   const onConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
+    (params) => {
+      const newEdge = {
+        ...params,
+        data: {
+          buttonName: `button_${params.source}_to_${params.target}`,
+          buttonLabel: "Navigate",
+          connectionType: "navigation",
+          priority: 1,
+          conditions: {},
+        },
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    },
     [setEdges]
   );
 
@@ -300,7 +476,10 @@ function Flow() {
         position,
         data: {
           label: `Step ${nodes.length}`,
+          templateId: `template_${getNodeId()}`,
+          templateName: `step_${nodes.length}`,
           type: "regular",
+          hasButtons: true,
           createdAt: new Date().toISOString(),
         },
         style: {
@@ -329,7 +508,10 @@ function Flow() {
       },
       data: {
         label: `Step ${nodes.length}`,
+        templateId: `template_${getNodeId()}`,
+        templateName: `step_${nodes.length}`,
         type: "regular",
+        hasButtons: true,
         createdAt: new Date().toISOString(),
       },
       style: {
@@ -345,6 +527,23 @@ function Flow() {
     setNodes((nds) => nds.concat(newNode));
   }, [setNodes, nodes.length]);
 
+  const updateConnectionData = useCallback(
+    (edgeId, updates, setAsSelected = false) => {
+      setEdges((eds) =>
+        eds.map((edge) =>
+          edge.id === edgeId
+            ? { ...edge, data: { ...edge.data, ...updates } }
+            : edge
+        )
+      );
+
+      if (setAsSelected) {
+        setSelectedEdgeId(edgeId);
+      }
+    },
+    [setEdges]
+  );
+
   const addFinalButton = useCallback(() => {
     const finalNode = {
       id: getNodeId(),
@@ -352,7 +551,10 @@ function Flow() {
       position: { x: 200, y: 300 },
       data: {
         label: "Final Button",
+        templateId: `template_final_${getNodeId()}`,
+        templateName: "final_step",
         type: "final",
+        hasButtons: false,
         createdAt: new Date().toISOString(),
       },
       style: {
@@ -371,6 +573,7 @@ function Flow() {
   const resetFlow = useCallback(() => {
     setNodes(initialNodes);
     setEdges([]);
+    setSelectedEdgeId(null);
   }, [setNodes, setEdges]);
 
   const exportData = useCallback(() => {
@@ -388,6 +591,14 @@ function Flow() {
     navigator.clipboard.writeText(JSON.stringify(flowData, null, 2));
     alert("Flow data copied to clipboard!");
   }, [flowData]);
+
+  const handleEdgeClick = useCallback((event, edge) => {
+    setSelectedEdgeId(edge.id);
+  }, []);
+
+  const handleCloseEditor = useCallback(() => {
+    setSelectedEdgeId(null);
+  }, []);
 
   return (
     <AppContainer>
@@ -420,6 +631,14 @@ function Flow() {
           </ActionButton>
         </ButtonContainer>
 
+        {/* Edge Editor */}
+        <EdgeEditor
+          selectedEdge={selectedEdgeId}
+          edges={edges}
+          onUpdateConnection={updateConnectionData}
+          onClose={handleCloseEditor}
+        />
+
         <ConnectionsArray>
           <SectionTitle>
             Connections ({flowData.connections.length})
@@ -437,53 +656,40 @@ function Flow() {
             </div>
           ) : (
             flowData.connections.map((connection) => (
-              <ConnectionItem key={connection.connectionId}>
-                <strong>{connection.source.label}</strong>
-                <span style={{ color: "#64748b", margin: "0 8px" }}>→</span>
-                <strong>{connection.target.label}</strong>
+              <ConnectionItem
+                key={connection.connectionId}
+                style={{
+                  background:
+                    selectedEdgeId === connection.connectionId
+                      ? "#e0f2fe"
+                      : "#f1f5f9",
+                  borderLeftColor:
+                    selectedEdgeId === connection.connectionId
+                      ? "#0369a1"
+                      : "#3b82f6",
+                }}
+                onClick={() => setSelectedEdgeId(connection.connectionId)}
+              >
+                <div>
+                  <strong>{connection.source.buttonLabel}</strong>
+                  <span style={{ color: "#64748b", margin: "0 8px" }}>→</span>
+                  <strong>{connection.target.templateName}</strong>
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.7rem",
+                    color: "#64748b",
+                    marginTop: "4px",
+                  }}
+                >
+                  Type: {connection.connectionType} | Button:{" "}
+                  {connection.source.buttonName} | Priority:{" "}
+                  {connection.priority || 1}
+                </div>
               </ConnectionItem>
             ))
           )}
         </ConnectionsArray>
-
-        {/* <DataSection>
-          <SectionTitle>Structured Data</SectionTitle>
-          <Pre>{JSON.stringify(flowData, null, 2)}</Pre>
-        </DataSection> */}
-
-        {/* <Section>
-          <SectionTitle>Database Schema</SectionTitle>
-          <List>
-            <ListItem>
-              <strong>nodes:</strong> id, label, type, position, timestamps
-            </ListItem>
-            <ListItem>
-              <strong>edges:</strong> id, source, target, connection type
-            </ListItem>
-            <ListItem>
-              <strong>connections:</strong> structured relationship data
-            </ListItem>
-            <ListItem>
-              <strong>metadata:</strong> flow statistics and timestamps
-            </ListItem>
-          </List>
-        </Section>
-
-        <Section>
-          <SectionTitle>Flow Statistics</SectionTitle>
-          <List>
-            <ListItem>Total Nodes: {flowData.metadata.totalNodes}</ListItem>
-            <ListItem>
-              Total Connections: {flowData.metadata.totalConnections}
-            </ListItem>
-            <ListItem>
-              Initial Node: {flowData.metadata.hasInitialNode ? "✅" : "❌"}
-            </ListItem>
-            <ListItem>
-              Final Node: {flowData.metadata.hasFinalNode ? "✅" : "❌"}
-            </ListItem>
-          </List>
-        </Section> */}
       </Sidebar>
 
       <FlowContainer onDrop={onDrop} onDragOver={onDragOver}>
@@ -493,6 +699,7 @@ function Flow() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onEdgeClick={handleEdgeClick}
           fitView
         >
           <MiniMap
